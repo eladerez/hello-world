@@ -46,54 +46,94 @@
     navigate("list", null);
   }
 
-  // -- custom (user-added) questions ------------------------------------
-  // Stored in localStorage: per-browser only, no server/backend involved.
+  // -- shared, cross-device storage ---------------------------------------
+  // Added questions, hidden built-ins, and text explanations are kept on
+  // the server (a small JSON file, via serve.py's /api/state) so every
+  // device that opens this site sees the same content — not just the
+  // browser that added it. A localStorage mirror keeps the last known
+  // state usable if the server is briefly unreachable (e.g. off the LAN).
 
-  const CUSTOM_STORAGE_KEY = "mlqa:custom-questions";
+  const API_STATE_URL = "/api/state";
+  const STATE_CACHE_KEY = "mlqa:state-cache";
 
-  function loadCustomQuestions() {
+  // Pre-sync per-device storage keys, kept only so a device upgrading from
+  // that version doesn't lose whatever it had already saved.
+  const LEGACY_CUSTOM_KEY = "mlqa:custom-questions";
+  const LEGACY_HIDDEN_KEY = "mlqa:hidden-questions";
+  const LEGACY_ANNOTATIONS_KEY = "mlqa:text-explanations";
+
+  function readJson(key, fallback) {
     try {
-      const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
     } catch (e) {
-      return [];
+      return fallback;
     }
   }
 
-  function saveCustomQuestions() {
+  function legacyLocalState() {
+    return {
+      customQuestions: readJson(LEGACY_CUSTOM_KEY, []),
+      hiddenIds: readJson(LEGACY_HIDDEN_KEY, []),
+      textAnnotations: readJson(LEGACY_ANNOTATIONS_KEY, []),
+    };
+  }
+
+  function cacheState(state) {
     try {
-      localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(customQuestions));
+      localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(state));
     } catch (e) {
       // localStorage unavailable (private browsing, storage full, etc.) — ignore.
     }
   }
 
-  let customQuestions = loadCustomQuestions();
+  function applyState(state) {
+    customQuestions = Array.isArray(state.customQuestions) ? state.customQuestions : [];
+    hiddenIds = Array.isArray(state.hiddenIds) ? state.hiddenIds : [];
+    textAnnotations = Array.isArray(state.textAnnotations) ? state.textAnnotations : [];
+  }
+
+  function persistState() {
+    const state = { customQuestions, hiddenIds, textAnnotations };
+    cacheState(state);
+    try {
+      fetch(API_STATE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state),
+      }).catch(() => {});
+    } catch (e) {
+      // Server unreachable, or fetch itself unavailable/blocked — the cache
+      // above keeps this device usable; the change just won't show up on
+      // other devices until the server is reachable again.
+    }
+  }
+
+  async function bootstrap() {
+    let state = null;
+    let gotFromServer = false;
+    try {
+      const res = await fetch(API_STATE_URL);
+      if (res.ok) {
+        state = await res.json();
+        gotFromServer = true;
+      }
+    } catch (e) {
+      // Server unreachable — fall back below.
+    }
+    if (!state) state = readJson(STATE_CACHE_KEY, null);
+    if (!state) state = legacyLocalState();
+    applyState(state);
+    cacheState(state);
+    if (!gotFromServer) persistState();
+    render();
+  }
+
+  let customQuestions = [];
 
   // Removing one of the built-in QUESTIONS can't touch the static file at
   // runtime, so "removing" a built-in question just hides its id.
-  const HIDDEN_STORAGE_KEY = "mlqa:hidden-questions";
-
-  function loadHiddenIds() {
-    try {
-      const raw = localStorage.getItem(HIDDEN_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function saveHiddenIds() {
-    try {
-      localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(hiddenIds));
-    } catch (e) {
-      // localStorage unavailable (private browsing, storage full, etc.) — ignore.
-    }
-  }
-
-  let hiddenIds = loadHiddenIds();
+  let hiddenIds = [];
 
   // -- text explanations (highlight a phrase, attach your own note) ----
   // A note is tied to the piece of content it was written on (a question's
@@ -101,27 +141,19 @@
   // the exact phrase that was selected. Re-applied on every render by
   // searching that content's text for the phrase — see applyAnnotations().
 
-  const ANNOTATION_STORAGE_KEY = "mlqa:text-explanations";
+  let textAnnotations = [];
 
-  function loadAnnotations() {
-    try {
-      const raw = localStorage.getItem(ANNOTATION_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
+  function saveCustomQuestions() {
+    persistState();
+  }
+
+  function saveHiddenIds() {
+    persistState();
   }
 
   function saveAnnotations() {
-    try {
-      localStorage.setItem(ANNOTATION_STORAGE_KEY, JSON.stringify(textAnnotations));
-    } catch (e) {
-      // localStorage unavailable (private browsing, storage full, etc.) — ignore.
-    }
+    persistState();
   }
-
-  let textAnnotations = loadAnnotations();
 
   function addAnnotation(sourceId, text, explanation) {
     const note = {
@@ -809,5 +841,5 @@
   homeBtn.addEventListener("click", goHome);
   enableFormattedPaste(annotationExplanationInput);
 
-  render();
+  bootstrap();
 })();
