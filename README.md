@@ -48,6 +48,21 @@ That looks up `GLOSSARY["gradient-descent"]` (the slug is the bracketed text, lo
 
 `explanation` text can contain further `[[...]]` links, so readers can keep drilling into related terms.
 
+### Formatting
+
+Question, answer, and explanation text also support:
+
+| Syntax | Result |
+|---|---|
+| `**bold**` | **bold** |
+| `__underline__` | underlined |
+| `## Heading` on its own line | a subheading |
+| a blank line between lines | starts a new paragraph |
+
+This works the same way whether the text is written in `js/data.js` or typed into the **+ Add a question** form.
+
+You don't have to type that syntax by hand: pasting into the question/answer fields from Word, Google Docs, or a webpage carries bold, underline, and headings over automatically, converting them to the syntax above. (Plain-text sources, like a code editor or terminal, paste as-is with no conversion needed.)
+
 ## Deploying privately, for free — Cloudflare Pages + Cloudflare Access
 
 This puts a real login wall (email one-time code, or Google/GitHub sign-in) in front of the whole site, at no cost, and works fine on both mobile and laptop browsers.

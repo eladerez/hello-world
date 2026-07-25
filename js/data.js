@@ -18,6 +18,12 @@
  *
  * Explanation text can itself contain [[...]] links, so readers can
  * drill down through related terms.
+ *
+ * Formatting is also supported inside those same strings:
+ *   **bold text**
+ *   __underlined text__
+ *   ## Heading on its own line
+ *   a blank line between lines starts a new paragraph
  */
 
 const QUESTIONS = [
@@ -25,19 +31,22 @@ const QUESTIONS = [
     id: "q-gradient-descent",
     question: "How does [[gradient descent]] actually train a [[neural-network|neural network]]?",
     answer:
-      "Gradient descent repeatedly nudges the network's [[parameters]] in the direction that most reduces the [[loss-function|loss function]]. " +
-      "At each step it computes the gradient (the slope of the loss with respect to every parameter, found via [[backpropagation]]), " +
-      "then takes a small step opposite that gradient, scaled by the [[learning-rate|learning rate]]. Repeated over many steps, " +
-      "this walks the parameters toward a set of values that make the model's predictions match the training data well, " +
-      "while trying to avoid [[overfitting]] along the way.",
+      `Gradient descent repeatedly nudges the network's [[parameters]] in the direction that most reduces the [[loss-function|loss function]].
+
+## How a step works
+At each step it computes the **gradient** — the slope of the loss with respect to every parameter, found via [[backpropagation]] — then takes a small step __opposite__ that gradient, scaled by the [[learning-rate|learning rate]].
+
+## Why it works
+Repeated over many steps, this walks the parameters toward values that make the model's predictions match the training data well, while trying to avoid [[overfitting]] along the way.`,
   },
   {
     id: "q-overfitting",
     question: "What is [[overfitting]] and how do people try to prevent it?",
     answer:
-      "Overfitting is when a model learns the noise and quirks of its training data instead of the underlying pattern, so it performs " +
-      "well on training data but poorly on new data. Common defenses include [[regularization]], gathering more training data, " +
-      "using a simpler model, early stopping, and holding out a validation set to catch it before it happens.",
+      `Overfitting is when a model learns the noise and quirks of its training data instead of the underlying pattern, so it performs **well on training data but poorly on new data**.
+
+## Common defenses
+[[regularization]], gathering more training data, using a __simpler model__, early stopping, and holding out a validation set to catch it before it happens.`,
   },
 ];
 

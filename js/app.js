@@ -147,30 +147,76 @@
     return { key: inner.slice(0, pipeIndex), display: inner.slice(pipeIndex + 1) };
   }
 
-  // Render text with [[...]] converted into hoverable/clickable spans.
-  function renderLinkedText(raw) {
+  // Inline markup on a single line: [[glossary links]], **bold**, __underline__.
+  // Everything else is HTML-escaped, so this is safe to use on user-typed text.
+  const INLINE_PATTERN = /\[\[([^\]]+)\]\]|\*\*([^*]+)\*\*|__([^_]+)__/g;
+
+  function renderInline(raw) {
     let result = "";
     let lastIndex = 0;
     let match;
-    LINK_PATTERN.lastIndex = 0;
-    while ((match = LINK_PATTERN.exec(raw)) !== null) {
+    INLINE_PATTERN.lastIndex = 0;
+    while ((match = INLINE_PATTERN.exec(raw)) !== null) {
       result += escapeHtml(raw.slice(lastIndex, match.index));
-      const { key, display } = splitLink(match[1]);
-      const slug = slugify(key);
-      if (GLOSSARY[slug]) {
-        result += `<span class="term" data-term="${slug}" tabindex="0" role="button">${escapeHtml(display)}</span>`;
-      } else {
-        result += escapeHtml(display);
+      if (match[1] !== undefined) {
+        const { key, display } = splitLink(match[1]);
+        const slug = slugify(key);
+        result += GLOSSARY[slug]
+          ? `<span class="term" data-term="${slug}" tabindex="0" role="button">${escapeHtml(display)}</span>`
+          : escapeHtml(display);
+      } else if (match[2] !== undefined) {
+        result += `<strong>${escapeHtml(match[2])}</strong>`;
+      } else if (match[3] !== undefined) {
+        result += `<u>${escapeHtml(match[3])}</u>`;
       }
-      lastIndex = LINK_PATTERN.lastIndex;
+      lastIndex = INLINE_PATTERN.lastIndex;
     }
     result += escapeHtml(raw.slice(lastIndex));
     return result;
   }
 
-  // Plain display text, no markup, no links (used in the list view).
-  function stripLinks(raw) {
-    return raw.replace(LINK_PATTERN, (_, inner) => splitLink(inner).display);
+  // Full block content: a blank line starts a new paragraph, and any line
+  // starting with "#" is always its own subheading, whether or not it's
+  // surrounded by blank lines.
+  function renderFormattedText(raw) {
+    const blocks = [];
+    let paraLines = [];
+
+    function flushParagraph() {
+      if (paraLines.length > 0) {
+        blocks.push(`<p>${paraLines.map(renderInline).join("<br>")}</p>`);
+        paraLines = [];
+      }
+    }
+
+    raw.split("\n").forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (line === "") {
+        flushParagraph();
+        return;
+      }
+      const heading = line.match(/^#{1,6}\s+(.*)$/);
+      if (heading) {
+        flushParagraph();
+        blocks.push(`<h3 class="content-heading">${renderInline(heading[1])}</h3>`);
+        return;
+      }
+      paraLines.push(line);
+    });
+    flushParagraph();
+
+    return blocks.join("");
+  }
+
+  // Plain display text, no markup (used for the one-line preview in the list view).
+  function stripFormatting(raw) {
+    return raw
+      .replace(LINK_PATTERN, (_, inner) => splitLink(inner).display)
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/__([^_]+)__/g, "$1")
+      .replace(/\s*\n+\s*/g, " ")
+      .trim();
   }
 
   function findQuestion(id) {
@@ -233,11 +279,83 @@
   window.addEventListener("scroll", hideTooltip, true);
   window.addEventListener("resize", hideTooltip);
 
+  // -- rich-text paste handling ------------------------------------------
+  // A <textarea> only ever holds plain text, so pasting from Word/Google
+  // Docs/a webpage normally drops all formatting. Instead we read the
+  // clipboard's HTML flavor (when present) and convert bold/underline/
+  // headings/paragraphs into this site's **bold** / __underline__ / "## "
+  // syntax, then insert that as plain text — so paste keeps the formatting.
+
+  function elementHasStyle(el, pattern) {
+    return pattern.test(el.getAttribute("style") || "");
+  }
+
+  function htmlClipboardToFormattedText(html) {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    function walk(node) {
+      let out = "";
+      node.childNodes.forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE) {
+          out += child.textContent;
+          return;
+        }
+        if (child.nodeType !== Node.ELEMENT_NODE) return;
+        const tag = child.tagName.toLowerCase();
+        if (tag === "script" || tag === "style") return;
+
+        let inner = walk(child);
+        // Google Docs/Word export bold/underline as inline styles rather
+        // than <b>/<u>, so check both.
+        const isBold = tag === "b" || tag === "strong" || elementHasStyle(child, /font-weight\s*:\s*(bold|[6-9]00)/i);
+        const isUnderline = tag === "u" || elementHasStyle(child, /text-decoration[^;]*underline/i);
+        if (isBold && inner.trim()) inner = `**${inner.trim()}**`;
+        if (isUnderline && inner.trim()) inner = `__${inner.trim()}__`;
+
+        if (tag === "br") {
+          inner = "\n";
+        } else if (/^h[1-6]$/.test(tag)) {
+          inner = `\n\n## ${inner.trim()}\n\n`;
+        } else if (tag === "p" || tag === "div" || tag === "li" || tag === "tr") {
+          inner = `\n${inner}\n`;
+        }
+        out += inner;
+      });
+      return out;
+    }
+
+    return walk(container)
+      .split("\n")
+      .map((l) => l.trim())
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    textarea.value = value.slice(0, start) + text + value.slice(end);
+    const newPos = start + text.length;
+    textarea.selectionStart = textarea.selectionEnd = newPos;
+  }
+
+  function enableFormattedPaste(textarea) {
+    textarea.addEventListener("paste", (e) => {
+      const html = e.clipboardData && e.clipboardData.getData("text/html");
+      if (!html) return; // no rich clipboard data — let the normal plain-text paste happen
+      e.preventDefault();
+      insertAtCursor(textarea, htmlClipboardToFormattedText(html));
+    });
+  }
+
   // -- views -------------------------------------------------------------
 
   function renderListView() {
     const items = allQuestions().map(
-      (q) => `<li><button class="question-link" data-qid="${q.id}">${escapeHtml(stripLinks(q.question))}</button></li>`
+      (q) => `<li><button class="question-link" data-qid="${q.id}">${escapeHtml(stripFormatting(q.question))}</button></li>`
     ).join("");
     appEl.innerHTML = `<h1>ML Questions</h1>
       <p class="hint">Pick a question. Inside it, hover or tap any underlined term for an explanation.</p>
@@ -257,11 +375,11 @@
     }
     appEl.innerHTML = `<div class="card">
       <p class="eyebrow">Question</p>
-      <h2 class="question-text">${renderLinkedText(q.question)}</h2>
+      <h2 class="question-text">${renderInline(q.question)}</h2>
       <button class="reveal-btn" id="revealAnswer">Show answer</button>
       <div class="answer" id="answerBox" hidden>
         <p class="eyebrow">Answer</p>
-        <p class="answer-text">${renderLinkedText(q.answer)}</p>
+        <div class="answer-text">${renderFormattedText(q.answer)}</div>
       </div>
       <button class="delete-btn" id="removeQuestion">Remove this question</button>
     </div>`;
@@ -287,7 +405,7 @@
       </div>
       <div class="form-field">
         <label for="newAnswerText">Answer</label>
-        <textarea id="newAnswerText" rows="5" placeholder="Write the answer. Wrap any term in [[double brackets]] to link it to the glossary."></textarea>
+        <textarea id="newAnswerText" rows="6" placeholder="Write the answer, or paste from Word/Docs — bold, underline, and headings carry over automatically. You can also type **bold**, __underline__, [[term]] links, ## Heading on its own line, and a blank line between paragraphs."></textarea>
       </div>
       <div class="form-actions">
         <button class="reveal-btn" id="saveQuestionBtn" type="button">Save question</button>
@@ -297,6 +415,8 @@
 
     const qInput = document.getElementById("newQuestionText");
     const aInput = document.getElementById("newAnswerText");
+    enableFormattedPaste(qInput);
+    enableFormattedPaste(aInput);
 
     document.getElementById("cancelAddBtn").addEventListener("click", goHome);
     document.getElementById("saveQuestionBtn").addEventListener("click", () => {
@@ -321,7 +441,7 @@
     appEl.innerHTML = `<div class="card explanation-card">
       <p class="eyebrow">Term</p>
       <h2>${escapeHtml(entry.term)}</h2>
-      <p class="answer-text">${renderLinkedText(entry.explanation)}</p>
+      <div class="answer-text">${renderFormattedText(entry.explanation)}</div>
     </div>`;
     attachTermHandlers(appEl);
   }
