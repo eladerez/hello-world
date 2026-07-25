@@ -75,7 +75,7 @@ body {
   padding: 0.4rem 0.2rem;
 }
 
-.app { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+.app { padding: 1.25rem clamp(1rem, 4vw, 3rem) 4rem; }
 
 h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 
@@ -247,17 +247,12 @@ h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 
 .tooltip[hidden] { display: none; }
 
-/* Wide screens: let the question list fill the space as a grid, but keep a
-   single question/answer or the add-question form at a readable width
-   rather than stretching its text into very long, hard-to-read lines. */
-@media (min-width: 860px) {
-  .app { max-width: 1200px; padding-left: 2.5rem; padding-right: 2.5rem; }
-
-  .question-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
-  }
-  .card { max-width: 720px; margin: 0 auto; }
-  .add-question-btn { max-width: 720px; margin: 1rem auto 0; display: block; }
+/* Full width, no cap, no breakpoint — the page fills whatever window
+   it's opened in. The question list becomes a grid so the space is
+   actually used; auto-fill collapses it back to one column on a narrow
+   (e.g. phone) screen with no separate rule needed. */
+.question-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
 }
