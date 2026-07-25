@@ -63,6 +63,8 @@ This works the same way whether the text is written in `js/data.js` or typed int
 
 You don't have to type that syntax by hand: pasting into the question/answer fields from Word, Google Docs, or a webpage carries bold, underline, and headings over automatically, converting them to the syntax above. (Plain-text sources, like a code editor or terminal, paste as-is with no conversion needed.)
 
+You can also drag a `.md` file straight onto the Answer field to use its contents as the answer. Headings (`#`) and `**bold**` come through unchanged; since standard Markdown has no underline and treats `__text__` as bold too, it's normalized to `**text**` on drop rather than becoming underlined.
+
 ## Deploying privately, for free — Cloudflare Pages + Cloudflare Access
 
 This puts a real login wall (email one-time code, or Google/GitHub sign-in) in front of the whole site, at no cost, and works fine on both mobile and laptop browsers.

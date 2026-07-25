@@ -351,6 +351,43 @@
     });
   }
 
+  // -- drag-and-drop a .md file as the answer -----------------------------
+
+  function markdownFileToFormattedText(md) {
+    // Standard Markdown treats __text__ as bold — the same as **text** — but
+    // this site uses __text__ for underline. Normalize so a dropped-in .md
+    // file's bold text doesn't silently turn into underlined text.
+    return md.replace(/__([^_]+)__/g, "**$1**").replace(/\r\n/g, "\n").trim();
+  }
+
+  function enableMarkdownFileDrop(dropZone, textarea) {
+    ["dragenter", "dragover"].forEach((evt) => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+    });
+    ["dragleave", "dragend"].forEach((evt) => {
+      dropZone.addEventListener(evt, () => dropZone.classList.remove("drag-over"));
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      if (!/\.(md|markdown)$/i.test(file.name)) {
+        alert("Please drop a .md (Markdown) file.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        textarea.value = markdownFileToFormattedText(String(reader.result));
+        textarea.focus();
+      };
+      reader.readAsText(file);
+    });
+  }
+
   // -- views -------------------------------------------------------------
 
   function renderListView() {
@@ -403,9 +440,10 @@
         <label for="newQuestionText">Question</label>
         <textarea id="newQuestionText" rows="2" placeholder="e.g. What is [[overfitting]]?"></textarea>
       </div>
-      <div class="form-field">
+      <div class="form-field" id="answerDropZone">
         <label for="newAnswerText">Answer</label>
-        <textarea id="newAnswerText" rows="6" placeholder="Write the answer, or paste from Word/Docs — bold, underline, and headings carry over automatically. You can also type **bold**, __underline__, [[term]] links, ## Heading on its own line, and a blank line between paragraphs."></textarea>
+        <textarea id="newAnswerText" rows="6" placeholder="Write the answer, paste from Word/Docs, or drag in a .md file. You can also type **bold**, __underline__, [[term]] links, ## Heading on its own line, and a blank line between paragraphs."></textarea>
+        <p class="drop-hint">or drag a .md file here to use it as the answer</p>
       </div>
       <div class="form-actions">
         <button class="reveal-btn" id="saveQuestionBtn" type="button">Save question</button>
@@ -417,6 +455,7 @@
     const aInput = document.getElementById("newAnswerText");
     enableFormattedPaste(qInput);
     enableFormattedPaste(aInput);
+    enableMarkdownFileDrop(document.getElementById("answerDropZone"), aInput);
 
     document.getElementById("cancelAddBtn").addEventListener("click", goHome);
     document.getElementById("saveQuestionBtn").addEventListener("click", () => {

@@ -173,6 +173,20 @@ h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 
 .form-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.drop-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.form-field.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+  background: var(--term-bg);
+}
+
 .form-actions { display: flex; gap: 0.6rem; margin-top: 0.25rem; }
 
 .cancel-btn {
