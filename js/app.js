@@ -175,10 +175,48 @@
     return result;
   }
 
-  // Full block content: a blank line starts a new paragraph, and any line
-  // starting with "#" is always its own subheading, whether or not it's
-  // surrounded by blank lines.
+  // Markdown table helpers: "| a | b |" rows, with a "| --- | --- |" style
+  // separator row right after the header.
+  function splitTableRow(line) {
+    let trimmed = line.trim();
+    if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+    if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+    return trimmed.split("|").map((cell) => cell.trim());
+  }
+
+  function isTableSeparatorRow(line) {
+    if (!line.includes("|")) return false;
+    const cells = splitTableRow(line);
+    return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+  }
+
+  function cellAlignment(sepCell) {
+    const left = sepCell.startsWith(":");
+    const right = sepCell.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    if (left) return "left";
+    return "";
+  }
+
+  function renderTable(headerLine, sepLine, bodyLines) {
+    const headerCells = splitTableRow(headerLine);
+    const aligns = splitTableRow(sepLine).map(cellAlignment);
+    const styleFor = (i) => (aligns[i] ? ` style="text-align:${aligns[i]}"` : "");
+
+    const thead = `<tr>${headerCells.map((c, i) => `<th${styleFor(i)}>${renderInline(c)}</th>`).join("")}</tr>`;
+    const tbody = bodyLines
+      .map((line) => `<tr>${splitTableRow(line).map((c, i) => `<td${styleFor(i)}>${renderInline(c)}</td>`).join("")}</tr>`)
+      .join("");
+
+    return `<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  }
+
+  // Full block content: a blank line starts a new paragraph, any line
+  // starting with "#" is always its own subheading, and a Markdown table
+  // (header row + "---" separator row) renders as an actual <table>.
   function renderFormattedText(raw) {
+    const lines = raw.split("\n");
     const blocks = [];
     let paraLines = [];
 
@@ -189,20 +227,42 @@
       }
     }
 
-    raw.split("\n").forEach((rawLine) => {
-      const line = rawLine.trim();
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+
       if (line === "") {
         flushParagraph();
-        return;
+        i++;
+        continue;
       }
+
       const heading = line.match(/^#{1,6}\s+(.*)$/);
       if (heading) {
         flushParagraph();
         blocks.push(`<h3 class="content-heading">${renderInline(heading[1])}</h3>`);
-        return;
+        i++;
+        continue;
       }
+
+      if (line.includes("|") && i + 1 < lines.length && isTableSeparatorRow(lines[i + 1].trim())) {
+        flushParagraph();
+        const headerLine = line;
+        const sepLine = lines[i + 1].trim();
+        const bodyLines = [];
+        let j = i + 2;
+        while (j < lines.length && lines[j].trim() !== "" && lines[j].trim().includes("|")) {
+          bodyLines.push(lines[j].trim());
+          j++;
+        }
+        blocks.push(renderTable(headerLine, sepLine, bodyLines));
+        i = j;
+        continue;
+      }
+
       paraLines.push(line);
-    });
+      i++;
+    }
     flushParagraph();
 
     return blocks.join("");
@@ -212,9 +272,14 @@
   function stripFormatting(raw) {
     return raw
       .replace(LINK_PATTERN, (_, inner) => splitLink(inner).display)
+      .split("\n")
+      .filter((line) => !isTableSeparatorRow(line.trim()))
+      .join("\n")
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/\*\*([^*]+)\*\*/g, "$1")
       .replace(/__([^_]+)__/g, "$1")
+      .replace(/^\s*\|\s*|\s*\|\s*$/gm, "")
+      .replace(/\s*\|\s*/g, ", ")
       .replace(/\s*\n+\s*/g, " ")
       .trim();
   }
