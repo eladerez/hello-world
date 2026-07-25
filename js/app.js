@@ -6,6 +6,13 @@
   const backBtn = document.getElementById("backBtn");
   const forwardBtn = document.getElementById("forwardBtn");
   const homeBtn = document.getElementById("homeBtn");
+  const selectionActionsEl = document.getElementById("selectionActions");
+  const explainSelectionBtn = document.getElementById("explainSelectionBtn");
+  const annotationOverlayEl = document.getElementById("annotationOverlay");
+  const annotationSelectedTextEl = document.getElementById("annotationSelectedText");
+  const annotationExplanationInput = document.getElementById("annotationExplanationText");
+  const saveAnnotationBtn = document.getElementById("saveAnnotationBtn");
+  const cancelAnnotationBtn = document.getElementById("cancelAnnotationBtn");
 
   const supportsHover = window.matchMedia("(hover: hover)").matches;
 
@@ -87,6 +94,55 @@
   }
 
   let hiddenIds = loadHiddenIds();
+
+  // -- text explanations (highlight a phrase, attach your own note) ----
+  // A note is tied to the piece of content it was written on (a question's
+  // answer, a glossary explanation, or another note) via a sourceId, and to
+  // the exact phrase that was selected. Re-applied on every render by
+  // searching that content's text for the phrase — see applyAnnotations().
+
+  const ANNOTATION_STORAGE_KEY = "mlqa:text-explanations";
+
+  function loadAnnotations() {
+    try {
+      const raw = localStorage.getItem(ANNOTATION_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveAnnotations() {
+    try {
+      localStorage.setItem(ANNOTATION_STORAGE_KEY, JSON.stringify(textAnnotations));
+    } catch (e) {
+      // localStorage unavailable (private browsing, storage full, etc.) — ignore.
+    }
+  }
+
+  let textAnnotations = loadAnnotations();
+
+  function addAnnotation(sourceId, text, explanation) {
+    const note = {
+      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      sourceId,
+      text,
+      explanation: explanation.trim(),
+    };
+    textAnnotations.push(note);
+    saveAnnotations();
+    return note;
+  }
+
+  function removeAnnotation(id) {
+    textAnnotations = textAnnotations.filter((n) => n.id !== id);
+    saveAnnotations();
+  }
+
+  function findAnnotation(id) {
+    return textAnnotations.find((n) => n.id === id);
+  }
 
   function allQuestions() {
     return QUESTIONS.filter((q) => !hiddenIds.includes(q.id)).concat(customQuestions);
@@ -326,6 +382,7 @@
       }
       el.addEventListener("click", (e) => {
         e.preventDefault();
+        e.stopPropagation();
         hideTooltip();
         navigate("term", slug);
       });
@@ -337,6 +394,155 @@
       });
     });
   }
+
+  // -- applying saved text explanations onto rendered content -----------
+  // Walks the text nodes under `container` and wraps every occurrence of
+  // each saved note's phrase (for this sourceId) in a clickable span. Only
+  // matches phrases that fall within a single text node — a selection that
+  // crosses a bold/underline/link boundary is saved but won't be
+  // re-highlighted after a re-render.
+
+  function applyAnnotations(container, sourceId) {
+    const notes = textAnnotations.filter((n) => n.sourceId === sourceId && n.text);
+    if (!notes.length) return;
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    let n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    textNodes.forEach((startNode) => {
+      let current = startNode;
+      let again = true;
+      while (again) {
+        again = false;
+        const text = current.textContent;
+        let bestIndex = -1;
+        let bestNote = null;
+        notes.forEach((note) => {
+          const idx = text.indexOf(note.text);
+          if (idx !== -1 && (bestIndex === -1 || idx < bestIndex)) {
+            bestIndex = idx;
+            bestNote = note;
+          }
+        });
+        if (bestNote) {
+          const before = text.slice(0, bestIndex);
+          const match = text.slice(bestIndex, bestIndex + bestNote.text.length);
+          const after = text.slice(bestIndex + bestNote.text.length);
+          const parent = current.parentNode;
+          const span = document.createElement("span");
+          span.className = "annotation";
+          span.dataset.annotationId = bestNote.id;
+          span.tabIndex = 0;
+          span.setAttribute("role", "button");
+          span.textContent = match;
+          const afterNode = document.createTextNode(after);
+          parent.insertBefore(document.createTextNode(before), current);
+          parent.insertBefore(span, current);
+          parent.insertBefore(afterNode, current);
+          parent.removeChild(current);
+          current = afterNode;
+          again = true;
+        }
+      }
+    });
+  }
+
+  function attachAnnotationHandlers(container) {
+    container.querySelectorAll(".annotation").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hideTooltip();
+        navigate("annotation", el.dataset.annotationId);
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate("annotation", el.dataset.annotationId);
+        }
+      });
+    });
+  }
+
+  // -- selecting a phrase to explain --------------------------------------
+  // Any rendered answer/explanation text carries data-source-id. Selecting
+  // text inside one shows a floating "+ Explain" button; saving opens a
+  // note tied to that phrase, which becomes clickable immediately.
+
+  let pendingSelection = null; // { sourceId, text, containerEl }
+
+  function hideSelectionActions() {
+    selectionActionsEl.hidden = true;
+  }
+
+  function hideAnnotationForm() {
+    annotationOverlayEl.hidden = true;
+  }
+
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest("#selectionActions") || e.target.closest("#annotationOverlay")) return;
+    hideSelectionActions();
+  });
+
+  document.addEventListener("mouseup", (e) => {
+    if (e.target.closest("#selectionActions") || e.target.closest("#annotationOverlay")) return;
+    const sel = window.getSelection();
+    const text = sel && !sel.isCollapsed ? sel.toString().trim() : "";
+    if (!text) {
+      hideSelectionActions();
+      return;
+    }
+    const anchorEl = sel.anchorNode && (sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode);
+    const sourceEl = anchorEl && anchorEl.closest && anchorEl.closest("[data-source-id]");
+    if (!sourceEl) {
+      hideSelectionActions();
+      return;
+    }
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    selectionActionsEl.style.top = `${rect.top + window.scrollY - 42}px`;
+    selectionActionsEl.style.left = `${rect.left + window.scrollX}px`;
+    selectionActionsEl.hidden = false;
+    pendingSelection = { sourceId: sourceEl.dataset.sourceId, text, containerEl: sourceEl };
+  });
+
+  explainSelectionBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  explainSelectionBtn.addEventListener("click", () => {
+    if (!pendingSelection) return;
+    hideSelectionActions();
+    annotationSelectedTextEl.textContent = `"${pendingSelection.text}"`;
+    annotationExplanationInput.value = "";
+    annotationOverlayEl.hidden = false;
+    annotationExplanationInput.focus();
+  });
+
+  cancelAnnotationBtn.addEventListener("click", () => {
+    hideAnnotationForm();
+    pendingSelection = null;
+  });
+
+  annotationOverlayEl.addEventListener("mousedown", (e) => {
+    if (e.target === annotationOverlayEl) {
+      hideAnnotationForm();
+      pendingSelection = null;
+    }
+  });
+
+  saveAnnotationBtn.addEventListener("click", () => {
+    const explanation = annotationExplanationInput.value.trim();
+    if (!explanation || !pendingSelection) {
+      annotationExplanationInput.focus();
+      return;
+    }
+    const note = addAnnotation(pendingSelection.sourceId, pendingSelection.text, explanation);
+    const container = pendingSelection.containerEl;
+    hideAnnotationForm();
+    window.getSelection().removeAllRanges();
+    pendingSelection = null;
+    applyAnnotations(container, note.sourceId);
+    attachAnnotationHandlers(container);
+  });
 
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".term") && !e.target.closest("#tooltip")) hideTooltip();
@@ -481,7 +687,7 @@
       <button class="reveal-btn" id="revealAnswer">Show answer</button>
       <div class="answer" id="answerBox" hidden>
         <p class="eyebrow">Answer</p>
-        <div class="answer-text">${renderFormattedText(q.answer)}</div>
+        <div class="answer-text" data-source-id="question:${q.id}">${renderFormattedText(q.answer)}</div>
       </div>
       <button class="delete-btn" id="removeQuestion">Remove this question</button>
     </div>`;
@@ -496,6 +702,9 @@
       }
     });
     attachTermHandlers(appEl);
+    const answerTextEl = appEl.querySelector(".answer-text");
+    applyAnnotations(answerTextEl, `question:${q.id}`);
+    attachAnnotationHandlers(appEl);
   }
 
   function renderAddView() {
@@ -545,9 +754,34 @@
     appEl.innerHTML = `<div class="card explanation-card">
       <p class="eyebrow">Term</p>
       <h2>${escapeHtml(entry.term)}</h2>
-      <div class="answer-text">${renderFormattedText(entry.explanation)}</div>
+      <div class="answer-text" data-source-id="term:${slug}">${renderFormattedText(entry.explanation)}</div>
     </div>`;
     attachTermHandlers(appEl);
+    applyAnnotations(appEl.querySelector(".answer-text"), `term:${slug}`);
+    attachAnnotationHandlers(appEl);
+  }
+
+  function renderAnnotationView(id) {
+    const note = findAnnotation(id);
+    if (!note) {
+      appEl.innerHTML = `<p>That explanation no longer exists.</p>`;
+      return;
+    }
+    appEl.innerHTML = `<div class="card explanation-card">
+      <p class="eyebrow">Explanation</p>
+      <p class="annotation-quote">"${escapeHtml(note.text)}"</p>
+      <div class="answer-text" data-source-id="annotation:${note.id}">${renderFormattedText(note.explanation)}</div>
+      <button class="delete-btn" id="removeAnnotationBtn">Remove this explanation</button>
+    </div>`;
+    attachTermHandlers(appEl);
+    applyAnnotations(appEl.querySelector(".answer-text"), `annotation:${note.id}`);
+    attachAnnotationHandlers(appEl);
+    document.getElementById("removeAnnotationBtn").addEventListener("click", () => {
+      if (confirm("Remove this explanation?")) {
+        removeAnnotation(id);
+        goBack();
+      }
+    });
   }
 
   function render() {
@@ -557,6 +791,8 @@
       renderQuestionView(state.id);
     } else if (state.type === "term") {
       renderTermView(state.id);
+    } else if (state.type === "annotation") {
+      renderAnnotationView(state.id);
     } else if (state.type === "add") {
       renderAddView();
     } else {
@@ -571,6 +807,7 @@
   backBtn.addEventListener("click", goBack);
   forwardBtn.addEventListener("click", goForward);
   homeBtn.addEventListener("click", goHome);
+  enableFormattedPaste(annotationExplanationInput);
 
   render();
 })();

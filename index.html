@@ -19,6 +19,25 @@
 
 <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
 
+<div id="selectionActions" class="selection-actions" hidden>
+  <button id="explainSelectionBtn" type="button" class="explain-btn">+ Explain</button>
+</div>
+
+<div id="annotationOverlay" class="annotation-overlay" hidden>
+  <div class="card annotation-dialog">
+    <p class="eyebrow">Explain this text</p>
+    <p class="annotation-selected-text" id="annotationSelectedText"></p>
+    <div class="form-field">
+      <label for="annotationExplanationText">Explanation</label>
+      <textarea id="annotationExplanationText" rows="5" placeholder="Explain this part in more detail..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="reveal-btn" id="saveAnnotationBtn" type="button">Save explanation</button>
+      <button class="cancel-btn" id="cancelAnnotationBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>

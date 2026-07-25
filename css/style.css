@@ -9,6 +9,8 @@
   --term-bg: rgba(79, 70, 229, 0.08);
   --tooltip-bg: #1a1a1e;
   --tooltip-text: #ffffff;
+  --annotation: #b45309;
+  --annotation-bg: rgba(180, 83, 9, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +25,8 @@
     --term-bg: rgba(139, 133, 245, 0.16);
     --tooltip-bg: #f1f1f4;
     --tooltip-text: #14141a;
+    --annotation: #fbbf24;
+    --annotation-bg: rgba(251, 191, 36, 0.16);
   }
 }
 
@@ -271,6 +275,68 @@ h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 }
 
 .tooltip[hidden] { display: none; }
+
+.annotation {
+  color: var(--annotation);
+  background: var(--annotation-bg);
+  border-radius: 4px;
+  padding: 0 0.15em;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.annotation:hover, .annotation:focus-visible {
+  background: var(--annotation);
+  color: var(--accent-contrast);
+  text-decoration: none;
+  outline: none;
+}
+
+.annotation-quote,
+.annotation-selected-text {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--muted);
+  border-left: 3px solid var(--annotation);
+  padding-left: 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.selection-actions {
+  position: absolute;
+  z-index: 15;
+}
+
+.selection-actions[hidden] { display: none; }
+
+.explain-btn {
+  min-height: 34px;
+  padding: 0 0.85rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--annotation);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.annotation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 30;
+}
+
+.annotation-overlay[hidden] { display: none; }
+
+.annotation-dialog { width: 100%; max-width: 480px; }
 
 /* Full width, no cap, no breakpoint — the page fills whatever window
    it's opened in. The question list becomes a grid so the space is

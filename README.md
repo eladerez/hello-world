@@ -67,6 +67,12 @@ You don't have to type that syntax by hand: pasting into the question/answer fie
 
 You can also drag a `.md` file straight onto the Answer field to use its contents as the answer. Headings (`#`) and `**bold**` come through unchanged; since standard Markdown has no underline and treats `__text__` as bold too, it's normalized to `**text**` on drop rather than becoming underlined.
 
+### Explaining a specific phrase
+
+Select any run of words inside an answer or a term's explanation, and a small **+ Explain** button appears — click it to write a note just for that phrase. The phrase turns into its own underlined, clickable highlight; clicking it later opens a new window with your note (which can itself use `**bold**`, `__underline__`, headings, and further explained phrases). There's a **Remove this explanation** link on that window if you want to undo it.
+
+Like added questions, these notes live in `localStorage`, so they're private to the browser you wrote them in. One current limitation: the highlight is re-applied by matching the phrase's exact text on each visit, so it works reliably as long as your selection stays within a single run of plain text — selecting across a bold/underlined boundary saves the note, but it won't reappear as a clickable highlight after you navigate away and back.
+
 ## Deploying privately, for free — Cloudflare Pages + Cloudflare Access
 
 This puts a real login wall (email one-time code, or Google/GitHub sign-in) in front of the whole site, at no cost, and works fine on both mobile and laptop browsers.
