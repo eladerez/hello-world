@@ -27,6 +27,8 @@ python3 -m http.server 8000
 
 Then open http://localhost:8000 in a browser. On your phone, open `http://<your-laptop-ip>:8000` while on the same Wi-Fi network.
 
+While actively editing the site, use `python3 serve.py` instead — it serves the same directory (default port 8080) but disables caching, so a normal browser refresh always picks up the latest changes. Plain `http.server` sends no `Cache-Control` header, and some browsers will heuristically keep serving an old cached copy of `js/app.js` on refresh even after the file has changed on disk.
+
 ## Editing content
 
 All content lives in `js/data.js`:
