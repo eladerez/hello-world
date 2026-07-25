@@ -9,6 +9,14 @@ A small private-friendly website for browsing ML questions and answers, with hov
 
 No build step, no framework, no server-side code — it's a static site.
 
+## Adding questions from the browser
+
+Press **+ Add a question** at the bottom of the question list to add your own question and answer right from the page — no editing files required. Answers can use `[[double brackets]]` too, and will link to existing glossary terms just like the built-in questions.
+
+These are stored in your browser's `localStorage`, since the site has no backend: they only exist on the device/browser you added them in, and clearing site data (or using a different browser/incognito window) won't show them.
+
+Every question — including the built-in ones — has a **Remove this question** link on its page. Removing a question you added deletes it outright; removing a built-in question just hides it in that browser (the underlying data in `js/data.js` is unchanged, so it comes back if the browser's storage is cleared).
+
 ## Running it locally
 
 From the repo root:

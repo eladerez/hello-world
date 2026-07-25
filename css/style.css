@@ -97,6 +97,21 @@ h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 
 .question-link:active { background: var(--term-bg); }
 
+.add-question-btn {
+  width: 100%;
+  margin-top: 1rem;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-question-btn:active { background: var(--term-bg); }
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -131,6 +146,50 @@ h1 { font-size: 1.4rem; margin: 0.5rem 0 0.25rem; }
 .answer-text { margin: 0; font-size: 1rem; }
 
 .explanation-card h2 { margin: 0 0 0.75rem; }
+
+.form-field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+
+.form-field label { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+
+.form-field textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  resize: vertical;
+}
+
+.form-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.form-actions { display: flex; gap: 0.6rem; margin-top: 0.25rem; }
+
+.cancel-btn {
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.delete-btn {
+  display: block;
+  margin-top: 1rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.delete-btn:hover { color: #c0392b; }
 
 .term {
   color: var(--accent);

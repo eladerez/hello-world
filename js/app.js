@@ -39,6 +39,86 @@
     navigate("list", null);
   }
 
+  // -- custom (user-added) questions ------------------------------------
+  // Stored in localStorage: per-browser only, no server/backend involved.
+
+  const CUSTOM_STORAGE_KEY = "mlqa:custom-questions";
+
+  function loadCustomQuestions() {
+    try {
+      const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveCustomQuestions() {
+    try {
+      localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(customQuestions));
+    } catch (e) {
+      // localStorage unavailable (private browsing, storage full, etc.) — ignore.
+    }
+  }
+
+  let customQuestions = loadCustomQuestions();
+
+  // Removing one of the built-in QUESTIONS can't touch the static file at
+  // runtime, so "removing" a built-in question just hides its id.
+  const HIDDEN_STORAGE_KEY = "mlqa:hidden-questions";
+
+  function loadHiddenIds() {
+    try {
+      const raw = localStorage.getItem(HIDDEN_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveHiddenIds() {
+    try {
+      localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify(hiddenIds));
+    } catch (e) {
+      // localStorage unavailable (private browsing, storage full, etc.) — ignore.
+    }
+  }
+
+  let hiddenIds = loadHiddenIds();
+
+  function allQuestions() {
+    return QUESTIONS.filter((q) => !hiddenIds.includes(q.id)).concat(customQuestions);
+  }
+
+  function isCustomQuestion(id) {
+    return customQuestions.some((q) => q.id === id);
+  }
+
+  function addCustomQuestion(questionText, answerText) {
+    const q = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      question: questionText.trim(),
+      answer: answerText.trim(),
+    };
+    customQuestions.push(q);
+    saveCustomQuestions();
+    return q;
+  }
+
+  // Removes a question from the list — deletes it outright if it was
+  // user-added, otherwise just hides the built-in question going forward.
+  function removeQuestion(id) {
+    if (isCustomQuestion(id)) {
+      customQuestions = customQuestions.filter((q) => q.id !== id);
+      saveCustomQuestions();
+    } else {
+      hiddenIds.push(id);
+      saveHiddenIds();
+    }
+  }
+
   // -- text helpers --------------------------------------------------
 
   function slugify(str) {
@@ -94,7 +174,7 @@
   }
 
   function findQuestion(id) {
-    return QUESTIONS.find((q) => q.id === id);
+    return allQuestions().find((q) => q.id === id);
   }
 
   // -- tooltip ---------------------------------------------------------
@@ -156,15 +236,17 @@
   // -- views -------------------------------------------------------------
 
   function renderListView() {
-    const items = QUESTIONS.map(
+    const items = allQuestions().map(
       (q) => `<li><button class="question-link" data-qid="${q.id}">${escapeHtml(stripLinks(q.question))}</button></li>`
     ).join("");
     appEl.innerHTML = `<h1>ML Questions</h1>
       <p class="hint">Pick a question. Inside it, hover or tap any underlined term for an explanation.</p>
-      <ul class="question-list">${items}</ul>`;
+      <ul class="question-list">${items}</ul>
+      <button class="add-question-btn" id="addQuestionBtn">+ Add a question</button>`;
     appEl.querySelectorAll(".question-link").forEach((btn) => {
       btn.addEventListener("click", () => navigate("question", btn.dataset.qid));
     });
+    document.getElementById("addQuestionBtn").addEventListener("click", () => navigate("add", null));
   }
 
   function renderQuestionView(id) {
@@ -181,12 +263,53 @@
         <p class="eyebrow">Answer</p>
         <p class="answer-text">${renderLinkedText(q.answer)}</p>
       </div>
+      <button class="delete-btn" id="removeQuestion">Remove this question</button>
     </div>`;
     document.getElementById("revealAnswer").addEventListener("click", () => {
       document.getElementById("answerBox").hidden = false;
       document.getElementById("revealAnswer").hidden = true;
     });
+    document.getElementById("removeQuestion").addEventListener("click", () => {
+      if (confirm("Remove this question and its answer?")) {
+        removeQuestion(id);
+        goHome();
+      }
+    });
     attachTermHandlers(appEl);
+  }
+
+  function renderAddView() {
+    appEl.innerHTML = `<div class="card">
+      <p class="eyebrow">New question</p>
+      <div class="form-field">
+        <label for="newQuestionText">Question</label>
+        <textarea id="newQuestionText" rows="2" placeholder="e.g. What is [[overfitting]]?"></textarea>
+      </div>
+      <div class="form-field">
+        <label for="newAnswerText">Answer</label>
+        <textarea id="newAnswerText" rows="5" placeholder="Write the answer. Wrap any term in [[double brackets]] to link it to the glossary."></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="reveal-btn" id="saveQuestionBtn" type="button">Save question</button>
+        <button class="cancel-btn" id="cancelAddBtn" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+    const qInput = document.getElementById("newQuestionText");
+    const aInput = document.getElementById("newAnswerText");
+
+    document.getElementById("cancelAddBtn").addEventListener("click", goHome);
+    document.getElementById("saveQuestionBtn").addEventListener("click", () => {
+      const qText = qInput.value.trim();
+      const aText = aInput.value.trim();
+      if (!qText || !aText) {
+        (qText ? aInput : qInput).focus();
+        return;
+      }
+      const q = addCustomQuestion(qText, aText);
+      navigate("question", q.id);
+    });
+    qInput.focus();
   }
 
   function renderTermView(slug) {
@@ -210,6 +333,8 @@
       renderQuestionView(state.id);
     } else if (state.type === "term") {
       renderTermView(state.id);
+    } else if (state.type === "add") {
+      renderAddView();
     } else {
       renderListView();
     }
